@@ -18,18 +18,27 @@ genai.configure(api_key=api_key)
 # ✅ Load Embedding Model
 embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-# ✅ Define FAISS Index Paths
-FAISS_INDEX_DIR = r"E:\PythonProject\BiologyBOT\faiss_index"
-
-BOOK_INDEX_PATHS = {
-    "9th": os.path.join(FAISS_INDEX_DIR, "faiss_index_class9", "biology_9th.faiss"),
-    "10th": os.path.join(FAISS_INDEX_DIR, "faiss_index_class10", "biology_10th.faiss"),
-    "11th": os.path.join(FAISS_INDEX_DIR, "faiss_index_class11", "biology_11th.faiss"),
-    "12th": os.path.join(FAISS_INDEX_DIR, "faiss_index_class12", "biology_12th.faiss"),
+# ✅ Define Paths for Each Grade Separately (Updated for GitHub)
+FAISS_INDEX_PATHS = {
+    "9th": "biology_9th.faiss",
+    "10th": "biology_10th.faiss",
+    "11th": "biology_11th.faiss",
+    "12th": "biology_12th.faiss",
 }
 
-BOOK_CHUNK_PATHS = {grade: path.replace(".faiss", "_chunks.pkl") for grade, path in BOOK_INDEX_PATHS.items()}
-BOOK_METADATA_PATHS = {grade: path.replace(".faiss", "_metadata.pkl") for grade, path in BOOK_INDEX_PATHS.items()}
+CHUNKS_PATHS = {
+    "9th": "biology_9th_chunks.pkl",
+    "10th": "biology_10th_chunks.pkl",
+    "11th": "biology_11th_chunks.pkl",
+    "12th": "biology_12th_chunks.pkl",
+}
+
+METADATA_PATHS = {
+    "9th": "biology_9th_metadata.pkl",
+    "10th": "biology_10th_metadata.pkl",
+    "11th": "biology_11th_metadata.pkl",
+    "12th": "biology_12th_metadata.pkl",
+}
 
 
 # ✅ Retrieve Relevant Text Using FAISS
@@ -37,10 +46,10 @@ def retrieve_relevant_text(query, grade, top_k=5):
     retrieved_text, retrieved_metadata = [], []
 
     try:
-        index = faiss.read_index(BOOK_INDEX_PATHS[grade])
-        with open(BOOK_CHUNK_PATHS[grade], "rb") as f:
+        index = faiss.read_index(FAISS_INDEX_PATHS[grade])
+        with open(CHUNKS_PATHS[grade], "rb") as f:
             chunks = pickle.load(f)
-        with open(BOOK_METADATA_PATHS[grade], "rb") as f:
+        with open(METADATA_PATHS[grade], "rb") as f:
             metadata = pickle.load(f)
 
         query_embedding = embedding_model.encode([query])
@@ -60,35 +69,37 @@ def retrieve_relevant_text(query, grade, top_k=5):
 # ✅ Function to Refine Answer Using Gemini AI
 def refine_answer_with_gemini(query, retrieved_text, grade):
     if not retrieved_text:
-        # If no textbook content found, generate an answer based on grade level
         input_text = f"""
         You are a biology teacher for grade {grade}. The student asked:
 
         "{query}"
 
         **Instructions:**
-        - Explain in simple and clear terms based on the student's grade level.
+        - Explain in simple and clear terms.
         - If it's a conceptual question, provide a detailed yet easy-to-understand response.
         - If possible, give a real-world example.
 
         **Final Answer:**
         """
     else:
-        input_text = f"""
-        You are a professional biology teacher. Below is a summary of textbook content related to the question:
+      input_text = f"""
+You are a highly skilled biology teacher with expertise in academic textbooks. Below is an excerpt from the official biology textbook that may contain the answer:
 
-        {retrieved_text}
+📖 **Textbook Content:**  
+{retrieved_text}
 
-        The user asked: "{query}"
+📌 **Student's Question:** "{query}"
 
-        **Instructions:**
-        - DO NOT copy the text verbatim.
-        - Summarize the information in a clear, easy-to-understand manner.
-        - Explain in simple language for students of grade {grade}.
-        - If applicable, add a real-world example.
+🔍 **Instructions:**  
+- Prioritize answering **only** from the textbook content above.  
+- Summarize and explain the textbook information **without copying verbatim**.  
+- Ensure the response is **clear, well-structured, and student-friendly**.  
+- If the textbook does **not** provide a full answer, expand logically based on **scientific principles** (but keep it relevant to the textbook).  
+- If applicable, **add a real-world example** to make it relatable.  
 
-        **Final Answer:**
-        """
+🎯 **Final Answer:**
+"""
+
 
     model = genai.GenerativeModel("gemini-1.5-flash")
 
@@ -99,7 +110,7 @@ def refine_answer_with_gemini(query, retrieved_text, grade):
         return "I couldn't generate an answer."
 
 
-# ✅ Function to Get Answer (Fixed Double "th" Issue)
+# ✅ Function to Get Answer
 def get_biology_answer(query, grade):
     retrieved_text, retrieved_metadata = retrieve_relevant_text(query, grade)
 
@@ -122,7 +133,7 @@ def generate_question_paper(grade, chapter, topic, mcq_count, short_q_count, lon
     retrieved_text, _ = retrieve_relevant_text(chapter_query, grade, top_k=10)
 
     if not retrieved_text:
-        return f"AI-generated questions based on grade {grade}, as no textbook content was found."
+        return f"AI-generated questions for grade {grade}, as no textbook content was found."
 
     input_prompt = f"""
     You are a biology teacher. Below is a summary of textbook content:
@@ -156,9 +167,7 @@ page = st.sidebar.radio("Go to:", ["🔍 Question Answering", "📝 Question Pap
 if page == "🔍 Question Answering":
     st.title("📘 Biology Chatbot - Question Answering")
 
-    # ✅ Grade Selection for QA
     grade_input = st.selectbox("Select Your Grade", ["9th", "10th", "11th", "12th"], key="qa_grade")
-
     user_query = st.text_input("Enter your biology question:", placeholder="e.g. What is photosynthesis?")
 
     if user_query:
@@ -171,9 +180,7 @@ if page == "🔍 Question Answering":
 elif page == "📝 Question Paper Generator":
     st.title("📝 Generate a Custom Question Paper")
 
-    # ✅ Grade Selection for Question Paper Generation
     grade_input_qp = st.selectbox("Select Grade", ["9th", "10th", "11th", "12th"], key="qp_grade")
-
     chapter_input = st.text_input("Enter Chapter Name:")
     topic_input = st.text_input("Enter Specific Topic (Optional):")
     mcq_count = st.number_input("Number of MCQs:", min_value=0, max_value=50, value=5)
